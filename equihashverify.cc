@@ -9,16 +9,19 @@
 #include <vector>
 using namespace v8;
 
-int verifyEH(const char *hdr, const std::vector<unsigned char> &soln, unsigned int n = 200, unsigned int k = 9){
+int verifyEH(const char *hdr, const char *nonceBuff, const std::vector<unsigned char> &soln, unsigned int n = 150, unsigned int k = 5){
   // Hash state
-  crypto_generichash_blake2b_state state;
+  eh_HashState state;
   EhInitialiseState(n, k, state);
 
-  crypto_generichash_blake2b_update(&state, (const unsigned char*)hdr, 140);
-
+  blake2b_update(&m_Blake, (uint8_t*) hdr, 32);
+  blake2b_update(&m_Blake, (uint8_t*) nonceBuff, 8);
+	
   bool isValid;
   if (n == 96 && k == 3) {
       isValid = Eh96_3.IsValidSolution(state, soln);
+  } else if (n == 150 && k == 5) {
+      isValid = Eh150_5.IsValidSolution(state, soln);
   } else if (n == 200 && k == 9) {
       isValid = Eh200_9.IsValidSolution(state, soln);
   } else if (n == 144 && k == 5) {
@@ -40,8 +43,8 @@ void Verify(const v8::FunctionCallbackInfo<Value>& args) {
   Isolate* isolate = Isolate::GetCurrent();
   HandleScope scope(isolate);
 
-  unsigned int n = 200;
-  unsigned int k = 9;
+  unsigned int n = 150;
+  unsigned int k = 5;
 
   if (args.Length() < 2) {
   isolate->ThrowException(Exception::TypeError(
@@ -50,11 +53,12 @@ void Verify(const v8::FunctionCallbackInfo<Value>& args) {
   }
 
   Local<Object> header = args[0]->ToObject();
-  Local<Object> solution = args[1]->ToObject();
+  Local<Object> nonce = args[1]->ToObject();
+  Local<Object> solution = args[2]->ToObject();
 
-  if (args.Length() == 4) {
-    n = args[2]->Uint32Value();
-    k = args[3]->Uint32Value();
+  if (args.Length() == 5) {
+    n = args[3]->Uint32Value();
+    k = args[4]->Uint32Value();
   }
 
   if(!node::Buffer::HasInstance(header) || !node::Buffer::HasInstance(solution)) {
@@ -64,7 +68,8 @@ void Verify(const v8::FunctionCallbackInfo<Value>& args) {
   }
 
   const char *hdr = node::Buffer::Data(header);
-  if(node::Buffer::Length(header) != 140) {
+  const char *nonceBuff = node::Buffer::Data(nonce);
+  if(node::Buffer::Length(header) != 32) {
 	  //invalid hdr length
 	  args.GetReturnValue().Set(false);
 	  return;
@@ -73,7 +78,7 @@ void Verify(const v8::FunctionCallbackInfo<Value>& args) {
 
   std::vector<unsigned char> vecSolution(soln, soln + node::Buffer::Length(solution));
 
-  bool result = verifyEH(hdr, vecSolution, n, k);
+  bool result = verifyEH(hdr, nonceBuff, vecSolution, n, k);
   args.GetReturnValue().Set(result);
 
 }
