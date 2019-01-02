@@ -1,6 +1,5 @@
 // Copyright (c) 2016 Jack Grigg
 // Copyright (c) 2016 The Zcash developers
-// Copyright (c) 2017-2018 The LitecoinZ developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,7 +9,11 @@
 #include "crypto/sha256.h"
 #include "utilstrencodings.h"
 
-#include "sodium.h"
+#if defined(__ANDROID__) || !defined(BEAM_USE_AVX)
+#include "blake/ref/blake2.h"
+#else
+#include "blake/sse/blake2.h"
+#endif
 
 #include <cstring>
 #include <exception>
@@ -19,9 +22,7 @@
 #include <set>
 #include <vector>
 
-#include <boost/static_assert.hpp>
-
-typedef crypto_generichash_blake2b_state eh_HashState;
+typedef blake2b_state eh_HashState;
 typedef uint32_t eh_index;
 typedef uint8_t eh_trunc;
 
@@ -62,7 +63,7 @@ public:
     std::string GetHex(size_t len) { return HexStr(hash, hash+len); }
 
     template<size_t W>
-    friend bool HasCollision(StepRow<W>& a, StepRow<W>& b, int l);
+    friend bool HasCollision(StepRow<W>& a, StepRow<W>& b, size_t l);
 };
 
 class CompareSR
@@ -78,7 +79,7 @@ public:
 };
 
 template<size_t WIDTH>
-bool HasCollision(StepRow<WIDTH>& a, StepRow<WIDTH>& b, int l);
+bool HasCollision(StepRow<WIDTH>& a, StepRow<WIDTH>& b, size_t l);
 
 template<size_t WIDTH>
 class FullStepRow : public StepRow<WIDTH>
@@ -95,7 +96,7 @@ public:
 
     FullStepRow(const FullStepRow<WIDTH>& a) : StepRow<WIDTH> {a} { }
     template<size_t W>
-    FullStepRow(const FullStepRow<W>& a, const FullStepRow<W>& b, size_t len, size_t lenIndices, int trim);
+    FullStepRow(const FullStepRow<W>& a, const FullStepRow<W>& b, size_t len, size_t lenIndices, size_t trim);
     FullStepRow& operator=(const FullStepRow<WIDTH>& a);
 
     inline bool IndicesBefore(const FullStepRow<WIDTH>& a, size_t len, size_t lenIndices) const { return memcmp(hash+len, a.hash+len, lenIndices) < 0; }
@@ -160,17 +161,21 @@ inline constexpr size_t equihash_solution_size(unsigned int N, unsigned int K) {
     return (1 << K)*(N/(K+1)+1)/8;
 }
 
+constexpr uint8_t GetSizeInBytes(size_t N)
+{
+    return static_cast<uint8_t>((N + 7) / 8);
+}
+
 template<unsigned int N, unsigned int K>
 class Equihash
 {
 private:
-    BOOST_STATIC_ASSERT(K < N);
-    BOOST_STATIC_ASSERT(N % 8 == 0);
-    BOOST_STATIC_ASSERT((N/(K+1)) + 1 < 8*sizeof(eh_index));
+    static_assert(K < N);
+    static_assert((N/(K+1)) + 1 < 8*sizeof(eh_index));
 
 public:
     enum : size_t { IndicesPerHashOutput=512/N };
-    enum : size_t { HashOutput=IndicesPerHashOutput*N/8 };
+    enum : size_t { HashOutput = IndicesPerHashOutput * GetSizeInBytes(N) };
     enum : size_t { CollisionBitLength=N/(K+1) };
     enum : size_t { CollisionByteLength=(CollisionBitLength+7)/8 };
     enum : size_t { HashLength=(K+1)*CollisionByteLength };
@@ -185,10 +190,10 @@ public:
     int InitialiseState(eh_HashState& base_state);
 #ifdef ENABLE_MINING
     bool BasicSolve(const eh_HashState& base_state,
-                    const std::function<bool(std::vector<unsigned char>)> validBlock,
+                    const std::function<bool(const std::vector<unsigned char>&)> validBlock,
                     const std::function<bool(EhSolverCancelCheck)> cancelled);
     bool OptimisedSolve(const eh_HashState& base_state,
-                        const std::function<bool(std::vector<unsigned char>)> validBlock,
+                        const std::function<bool(const std::vector<unsigned char>&)> validBlock,
                         const std::function<bool(EhSolverCancelCheck)> cancelled);
 #endif
     bool IsValidSolution(const eh_HashState& base_state, std::vector<unsigned char> soln);
@@ -200,11 +205,12 @@ static Equihash<96,3> Eh96_3;
 static Equihash<200,9> Eh200_9;
 static Equihash<96,5> Eh96_5;
 static Equihash<48,5> Eh48_5;
-static Equihash<144,5> Eh144_5;
-static Equihash<192,7> Eh192_7;
+static Equihash<150,5> Eh150_5;
 
 #define EhInitialiseState(n, k, base_state)  \
-    if (n == 96 && k == 3) {                 \
+    if (n == 150 && k == 5) {                 \
+        Eh150_5.InitialiseState(base_state);  \
+    } else if (n == 96 && k == 3) {           \
         Eh96_3.InitialiseState(base_state);  \
     } else if (n == 200 && k == 9) {         \
         Eh200_9.InitialiseState(base_state); \
@@ -212,20 +218,18 @@ static Equihash<192,7> Eh192_7;
         Eh96_5.InitialiseState(base_state);  \
     } else if (n == 48 && k == 5) {          \
         Eh48_5.InitialiseState(base_state);  \
-    } else if (n == 144 && k == 5) {         \
-        Eh144_5.InitialiseState(base_state); \
-    } else if (n == 192 && k == 7) {         \
-        Eh192_7.InitialiseState(base_state); \
     } else {                                 \
         throw std::invalid_argument("Unsupported Equihash parameters"); \
     }
 
 #ifdef ENABLE_MINING
 inline bool EhBasicSolve(unsigned int n, unsigned int k, const eh_HashState& base_state,
-                    const std::function<bool(std::vector<unsigned char>)> validBlock,
+                    const std::function<bool(const std::vector<unsigned char>&)> validBlock,
                     const std::function<bool(EhSolverCancelCheck)> cancelled)
 {
-    if (n == 96 && k == 3) {
+    if (n == 150 && k == 5 {
+        return Eh150_5.BasicSolve(base_state, validBlock, cancelled);
+    } else if (n == 96 && k == 3) {
         return Eh96_3.BasicSolve(base_state, validBlock, cancelled);
     } else if (n == 200 && k == 9) {
         return Eh200_9.BasicSolve(base_state, validBlock, cancelled);
@@ -233,27 +237,25 @@ inline bool EhBasicSolve(unsigned int n, unsigned int k, const eh_HashState& bas
         return Eh96_5.BasicSolve(base_state, validBlock, cancelled);
     } else if (n == 48 && k == 5) {
         return Eh48_5.BasicSolve(base_state, validBlock, cancelled);
-    } else if (n == 144 && k == 5) {
-        return Eh144_5.BasicSolve(base_state, validBlock, cancelled);
-    } else if (n == 192 && k == 7) {
-        return Eh192_7.BasicSolve(base_state, validBlock, cancelled);
     } else {
         throw std::invalid_argument("Unsupported Equihash parameters");
     }
 }
 
 inline bool EhBasicSolveUncancellable(unsigned int n, unsigned int k, const eh_HashState& base_state,
-                    const std::function<bool(std::vector<unsigned char>)> validBlock)
+                    const std::function<bool(const std::vector<unsigned char>&)> validBlock)
 {
     return EhBasicSolve(n, k, base_state, validBlock,
                         [](EhSolverCancelCheck pos) { return false; });
 }
 
 inline bool EhOptimisedSolve(unsigned int n, unsigned int k, const eh_HashState& base_state,
-                    const std::function<bool(std::vector<unsigned char>)> validBlock,
+                    const std::function<bool(const std::vector<unsigned char>&)> validBlock,
                     const std::function<bool(EhSolverCancelCheck)> cancelled)
 {
-    if (n == 96 && k == 3) {
+    if (n == 150 && k == 5) {
+        return Eh150_5.OptimisedSolve(base_state, validBlock, cancelled);
+    } else if (n == 96 && k == 3) {
         return Eh96_3.OptimisedSolve(base_state, validBlock, cancelled);
     } else if (n == 200 && k == 9) {
         return Eh200_9.OptimisedSolve(base_state, validBlock, cancelled);
@@ -261,17 +263,13 @@ inline bool EhOptimisedSolve(unsigned int n, unsigned int k, const eh_HashState&
         return Eh96_5.OptimisedSolve(base_state, validBlock, cancelled);
     } else if (n == 48 && k == 5) {
         return Eh48_5.OptimisedSolve(base_state, validBlock, cancelled);
-    } else if (n == 144 && k == 5) {
-        return Eh144_5.OptimisedSolve(base_state, validBlock, cancelled);
-    } else if (n == 192 && k == 7) {
-        return Eh192_7.OptimisedSolve(base_state, validBlock, cancelled);
     } else {
         throw std::invalid_argument("Unsupported Equihash parameters");
     }
 }
 
 inline bool EhOptimisedSolveUncancellable(unsigned int n, unsigned int k, const eh_HashState& base_state,
-                    const std::function<bool(std::vector<unsigned char>)> validBlock)
+                    const std::function<bool(const std::vector<unsigned char>&)> validBlock)
 {
     return EhOptimisedSolve(n, k, base_state, validBlock,
                             [](EhSolverCancelCheck pos) { return false; });
@@ -279,7 +277,9 @@ inline bool EhOptimisedSolveUncancellable(unsigned int n, unsigned int k, const 
 #endif // ENABLE_MINING
 
 #define EhIsValidSolution(n, k, base_state, soln, ret)   \
-    if (n == 96 && k == 3) {                             \
+    if (n == 150 && k == 5) {                             \
+        ret = Eh150_5.IsValidSolution(base_state, soln);  \
+    } else if (n == 96 && k == 3) {                      \
         ret = Eh96_3.IsValidSolution(base_state, soln);  \
     } else if (n == 200 && k == 9) {                     \
         ret = Eh200_9.IsValidSolution(base_state, soln); \
@@ -287,33 +287,8 @@ inline bool EhOptimisedSolveUncancellable(unsigned int n, unsigned int k, const 
         ret = Eh96_5.IsValidSolution(base_state, soln);  \
     } else if (n == 48 && k == 5) {                      \
         ret = Eh48_5.IsValidSolution(base_state, soln);  \
-    } else if (n == 144 && k == 5) {                     \
-        ret = Eh144_5.IsValidSolution(base_state, soln); \
-    } else if (n == 192 && k == 7) {                     \
-        ret = Eh192_7.IsValidSolution(base_state, soln); \
     } else {                                             \
         throw std::invalid_argument("Unsupported Equihash parameters"); \
     }
-
-inline unsigned int EhSolutionWidth(int n, int k)
-{
-    unsigned int ret;
-    if (n == 96 && k == 3) {
-        ret = Eh96_3.SolutionWidth;
-    } else if (n == 200 && k == 9) {
-        ret = Eh200_9.SolutionWidth;
-    } else if (n == 144 && k == 5) {
-        ret = Eh144_5.SolutionWidth;
-    } else if (n == 192 && k == 7) {
-        ret = Eh192_7.SolutionWidth;
-    } else if (n == 96 && k == 5) {
-        ret = Eh96_5.SolutionWidth;
-    } else if (n == 48 && k == 5) {
-        ret = Eh48_5.SolutionWidth;
-    } else {
-        throw std::invalid_argument("Unsupported Equihash parameters");
-    }
-    return ret;
-}
 
 #endif // BITCOIN_EQUIHASH_H
