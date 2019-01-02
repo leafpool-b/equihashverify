@@ -14,8 +14,8 @@ int verifyEH(const char *hdr, const char *nonceBuff, const std::vector<unsigned 
   eh_HashState state;
   EhInitialiseState(n, k, state);
 
-  blake2b_update(&m_Blake, (uint8_t*) hdr, 32);
-  blake2b_update(&m_Blake, (uint8_t*) nonceBuff, 8);
+  blake2b_update(&state, (uint8_t*) hdr, 32);
+  blake2b_update(&state, (uint8_t*) nonceBuff, 8);
 	
   bool isValid;
   if (n == 96 && k == 3) {
