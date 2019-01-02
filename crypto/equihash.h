@@ -22,6 +22,8 @@
 #include <set>
 #include <vector>
 
+#include <boost/static_assert.hpp>
+
 typedef blake2b_state eh_HashState;
 typedef uint32_t eh_index;
 typedef uint8_t eh_trunc;
@@ -170,9 +172,9 @@ template<unsigned int N, unsigned int K>
 class Equihash
 {
 private:
-    static_assert(K < N);
-    static_assert((N/(K+1)) + 1 < 8*sizeof(eh_index));
-
+    BOOST_STATIC_ASSERT(K < N);
+    BOOST_STATIC_ASSERT((N/(K+1)) + 1 < 8*sizeof(eh_index));
+  
 public:
     enum : size_t { IndicesPerHashOutput=512/N };
     enum : size_t { HashOutput = IndicesPerHashOutput * GetSizeInBytes(N) };
