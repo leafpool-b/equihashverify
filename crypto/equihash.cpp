@@ -17,7 +17,8 @@
 #include "config/bitcoin-config.h"
 #endif
 
-#include "compat/endian.h"
+//#include "compat/endian.h"
+#include "crypto/common.h"
 #include "crypto/equihash.h"
 //#include "util.h"
 
