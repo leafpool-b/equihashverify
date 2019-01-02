@@ -32,7 +32,7 @@ EhSolverCancelledException solver_cancelled;
 
 namespace
 {
-    constexpr void ZeroizeUnusedBits(size_t N, unsigned char* hash, size_t hLen)
+    constexpr int ZeroizeUnusedBits(size_t N, unsigned char* hash, size_t hLen)
     {
         uint8_t rem = N % 8;
         if (rem)
@@ -45,6 +45,7 @@ namespace
                 hash[i] &= b;
             }
         }
+	return 0;
     }
 }
 
