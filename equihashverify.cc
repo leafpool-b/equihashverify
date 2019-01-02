@@ -24,10 +24,10 @@ int verifyEH(const char *hdr, const char *nonceBuff, const std::vector<unsigned 
       isValid = Eh150_5.IsValidSolution(state, soln);
   } else if (n == 200 && k == 9) {
       isValid = Eh200_9.IsValidSolution(state, soln);
-  } else if (n == 144 && k == 5) {
-      isValid = Eh144_5.IsValidSolution(state, soln);
-  } else if (n == 192 && k == 7) {
-      isValid = Eh192_7.IsValidSolution(state, soln);
+  //} else if (n == 144 && k == 5) {
+  //    isValid = Eh144_5.IsValidSolution(state, soln);
+  //} else if (n == 192 && k == 7) {
+  //    isValid = Eh192_7.IsValidSolution(state, soln);
   } else if (n == 96 && k == 5) {
       isValid = Eh96_5.IsValidSolution(state, soln);
   } else if (n == 48 && k == 5) {
