@@ -14,6 +14,7 @@
 
 #pragma once
 #include "common.h"
+#include <boost/static_assert.hpp>
 
 namespace beam
 {
