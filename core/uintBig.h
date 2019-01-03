@@ -44,6 +44,52 @@ namespace beam
 		static uint32_t _GetOrder(const uint8_t* pDst, uint32_t nDst);
 		static bool _Accept(uint8_t* pDst, const uint8_t* pThr, uint32_t nDst, uint32_t nThrOrder);
 
+		template <typename T>
+		static void _AssignRangeAligned(uint8_t* pDst, uint32_t nDst, T x, uint32_t nOffsetBytes, uint32_t nBytesX)
+		{
+			BOOST_STATIC_ASSERT(T(-1) > 0);
+
+			assert(nDst >= nBytesX + nOffsetBytes);
+			nDst -= (nOffsetBytes + nBytesX);
+
+			for (uint32_t i = nBytesX; i--; x >>= 8)
+				pDst[nDst + i] = (uint8_t) x;
+		}
+
+		template <typename T>
+		static bool _AssignRangeAlignedSafe(uint8_t* pDst, uint32_t nDst, T x, uint32_t nOffsetBytes, uint32_t nBytesX) // returns false if truncated
+		{
+			if (nDst < nOffsetBytes)
+				return false;
+
+			uint32_t n = nDst - nOffsetBytes;
+			bool b = (nBytesX <= n);
+
+			_AssignRangeAligned<T>(pDst, nDst, x, nOffsetBytes, b ? nBytesX : n);
+			return b;
+		}
+
+		template <typename T>
+		static bool _AssignSafe(uint8_t* pDst, uint32_t nDst, T x, uint32_t nOffset) // returns false if truncated
+		{
+			uint32_t nOffsetBytes = nOffset >> 3;
+			nOffset &= 7;
+
+			if (!_AssignRangeAlignedSafe<T>(pDst, nDst, x << nOffset, nOffsetBytes, sizeof(x)))
+				return false;
+
+			if (nOffset)
+			{
+				nOffsetBytes += sizeof(x);
+				if (nDst - 1 < nOffsetBytes)
+					return false;
+
+				uint8_t resid = uint8_t(x >> ((sizeof(x) << 3) - nOffset));
+				pDst[nDst - 1 - nOffsetBytes] = resid;
+			}
+
+			return true;
+		}
 
 		template <typename T>
 		static void _ExportAligned(T& out, const uint8_t* pDst, uint32_t nDst)
