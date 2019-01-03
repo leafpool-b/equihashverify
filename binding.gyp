@@ -41,6 +41,7 @@
                 "-std=c++11",
                 "-Wl,--whole-archive",
                 "-fPIC",
+                "-fpermissive",
                 "-fexceptions"
                 
             ],
