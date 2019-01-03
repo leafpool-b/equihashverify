@@ -52,7 +52,7 @@ namespace beam
 			assert(nDst >= nBytesX + nOffsetBytes);
 			nDst -= (nOffsetBytes + nBytesX);
 
-			for (uint32_t i = nBytesX; i--; (uint8_t)x >>= 8)
+			for (uint32_t i = nBytesX; i--; x >>= 8)
 				pDst[nDst + i] = (uint8_t) x;
 		}
 
