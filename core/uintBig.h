@@ -44,62 +44,7 @@ namespace beam
 		static uint32_t _GetOrder(const uint8_t* pDst, uint32_t nDst);
 		static bool _Accept(uint8_t* pDst, const uint8_t* pThr, uint32_t nDst, uint32_t nThrOrder);
 
-		template <typename T>
-		static void _AssignRangeAligned(uint8_t* pDst, uint32_t nDst, T x, uint32_t nOffsetBytes, uint32_t nBytesX)
-		{
-			BOOST_STATIC_ASSERT(T(-1) > 0);
 
-			assert(nDst >= nBytesX + nOffsetBytes);
-			nDst -= (nOffsetBytes + nBytesX);
-
-			for (uint32_t i = nBytesX; i--; x >>= 8)
-				pDst[nDst + i] = (uint8_t) x;
-		}
-
-		template <typename T>
-		static bool _AssignRangeAlignedSafe(uint8_t* pDst, uint32_t nDst, T x, uint32_t nOffsetBytes, uint32_t nBytesX) // returns false if truncated
-		{
-			if (nDst < nOffsetBytes)
-				return false;
-
-			uint32_t n = nDst - nOffsetBytes;
-			bool b = (nBytesX <= n);
-
-			_AssignRangeAligned<T>(pDst, nDst, x, nOffsetBytes, b ? nBytesX : n);
-			return b;
-		}
-
-		template <typename T>
-		static bool _AssignSafe(uint8_t* pDst, uint32_t nDst, T x, uint32_t nOffset) // returns false if truncated
-		{
-			uint32_t nOffsetBytes = nOffset >> 3;
-			nOffset &= 7;
-
-			if (!_AssignRangeAlignedSafe<T>(pDst, nDst, x << nOffset, nOffsetBytes, sizeof(x)))
-				return false;
-
-			if (nOffset)
-			{
-				nOffsetBytes += sizeof(x);
-				if (nDst - 1 < nOffsetBytes)
-					return false;
-
-				uint8_t resid = uint8_t(x >> ((sizeof(x) << 3) - nOffset));
-				pDst[nDst - 1 - nOffsetBytes] = resid;
-			}
-
-			return true;
-		}
-
-		template <typename T>
-		static void _ExportAligned(T& out, const uint8_t* pDst, uint32_t nDst)
-		{
-			BOOST_STATIC_ASSERT(T(-1) > 0);
-
-			out = pDst[0];
-			for (uint32_t i = 1; i < nDst; i++)
-				out = (out << 8) | pDst[i];
-		}
 
 		static void _ShiftRight(uint8_t* pDst, uint32_t nDst, const uint8_t* pSrc, uint32_t nSrc, uint32_t nBits);
 		static void _ShiftLeft(uint8_t* pDst, uint32_t nDst, const uint8_t* pSrc, uint32_t nSrc, uint32_t nBits);
@@ -155,69 +100,13 @@ namespace beam
 			return *this;
 		}
 
-		template <uint32_t nBytesOther_>
-		uintBig_t& operator = (const uintBig_t<nBytesOther_>& v)
-		{
-			_Assign(m_pData, nBytes, v.m_pData, v.nBytes);
-			return *this;
-		}
-
-		uintBig_t& operator = (const Blob& v)
-		{
-			_Assign(m_pData, nBytes, static_cast<const uint8_t*>(v.p), v.n);
-			return *this;
-		}
 
 		bool operator == (Zero_) const
 		{
 			return memis0(m_pData, nBytes);
 		}
 
-		template <typename T>
-		void AssignOrdinal(T x)
-		{
-			memset0(m_pData, nBytes - sizeof(x));
-			AssignRange<T, 0>(x);
-		}
 
-		// from ordinal types (unsigned)
-		template <typename T>
-		uintBig_t& operator = (T x)
-		{
-			AssignOrdinal(x);
-			return *this;
-		}
-
-		template <typename T>
-		void Export(T& x) const
-		{
-			BOOST_STATIC_ASSERT(sizeof(T) >= nBytes);
-			_ExportAligned(x, m_pData, nBytes);
-		}
-
-		template <uint32_t iWord, typename T>
-		void ExportWord(T& x) const
-		{
-			BOOST_STATIC_ASSERT(sizeof(T) * (iWord + 1) <= nBytes);
-			_ExportAligned(x, m_pData + sizeof(T) * iWord, sizeof(T));
-		}
-
-		template <typename T, uint32_t nOffset>
-		void AssignRange(T x)
-		{
-			//BOOST_STATIC_ASSERT(!(nOffset & 7), "offset must be on byte boundary");
-			BOOST_STATIC_ASSERT(!(nOffset & 7));
-			//BOOST_STATIC_ASSERT(nBytes >= sizeof(x) + (nOffset >> 3), "too small");
-			BOOST_STATIC_ASSERT(nBytes >= sizeof(x) + (nOffset >> 3));
-
-			_AssignRangeAligned<T>(m_pData, nBytes, x, nOffset >> 3, sizeof(x));
-		}
-
-		template <typename T>
-		bool AssignSafe(T x, uint32_t nOffset) // returns false if truncated
-		{
-			return _AssignSafe(m_pData, nBytes, x, nOffset);
-		}
 
 		void Inc()
 		{
