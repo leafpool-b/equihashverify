@@ -12,8 +12,7 @@
                 "random.cpp",   
                 "util.cpp",
                 "utilstrencodings.cpp",
-                "crypto/equihash.cpp",
-                "crypto/blake/sse/blake2b.cpp",   
+                "crypto/equihash.cpp",            
                 "crypto/hmac_sha256.cpp",
                 "crypto/hmac_sha512.cpp",
                 "crypto/ripemd160.cpp",
@@ -22,6 +21,7 @@
                 "crypto/sha512.cpp",
                 "core/difficulty.cpp",
                 "core/uintBig.cpp",
+                "crypto/blake/sse/blake2b.cpp", 
                 "equihashverify.cc"                
             ],
             "include_dirs": [
