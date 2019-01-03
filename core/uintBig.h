@@ -47,7 +47,7 @@ namespace beam
 		template <typename T>
 		static void _AssignRangeAligned(uint8_t* pDst, uint32_t nDst, T x, uint32_t nOffsetBytes, uint32_t nBytesX)
 		{
-			BOOST_STATIC_ASSERT(T(-1) > 0, "must be unsigned");
+			BOOST_STATIC_ASSERT(T(-1) > 0);
 
 			assert(nDst >= nBytesX + nOffsetBytes);
 			nDst -= (nOffsetBytes + nBytesX);
@@ -94,7 +94,7 @@ namespace beam
 		template <typename T>
 		static void _ExportAligned(T& out, const uint8_t* pDst, uint32_t nDst)
 		{
-			BOOST_STATIC_ASSERT(T(-1) > 0, "must be unsigned");
+			BOOST_STATIC_ASSERT(T(-1) > 0);
 
 			out = pDst[0];
 			for (uint32_t i = 1; i < nDst; i++)
@@ -191,22 +191,24 @@ namespace beam
 		template <typename T>
 		void Export(T& x) const
 		{
-			BOOST_STATIC_ASSERT(sizeof(T) >= nBytes, "");
+			BOOST_STATIC_ASSERT(sizeof(T) >= nBytes);
 			_ExportAligned(x, m_pData, nBytes);
 		}
 
 		template <uint32_t iWord, typename T>
 		void ExportWord(T& x) const
 		{
-			BOOST_STATIC_ASSERT(sizeof(T) * (iWord + 1) <= nBytes, "");
+			BOOST_STATIC_ASSERT(sizeof(T) * (iWord + 1) <= nBytes);
 			_ExportAligned(x, m_pData + sizeof(T) * iWord, sizeof(T));
 		}
 
 		template <typename T, uint32_t nOffset>
 		void AssignRange(T x)
 		{
-			BOOST_STATIC_ASSERT(!(nOffset & 7), "offset must be on byte boundary");
-			BOOST_STATIC_ASSERT(nBytes >= sizeof(x) + (nOffset >> 3), "too small");
+			//BOOST_STATIC_ASSERT(!(nOffset & 7), "offset must be on byte boundary");
+			BOOST_STATIC_ASSERT(!(nOffset & 7));
+			//BOOST_STATIC_ASSERT(nBytes >= sizeof(x) + (nOffset >> 3), "too small");
+			BOOST_STATIC_ASSERT(nBytes >= sizeof(x) + (nOffset >> 3));
 
 			_AssignRangeAligned<T>(m_pData, nBytes, x, nOffset >> 3, sizeof(x));
 		}
