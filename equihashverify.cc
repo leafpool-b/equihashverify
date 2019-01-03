@@ -72,7 +72,7 @@ void Verify(const v8::FunctionCallbackInfo<Value>& args) {
   unsigned int n = 150;
   unsigned int k = 5;
 
-  if (args.Length() < 2) {
+  if (args.Length() < 3) {
   isolate->ThrowException(Exception::TypeError(
     String::NewFromUtf8(isolate, "Wrong number of arguments")));
   return;
@@ -87,7 +87,7 @@ void Verify(const v8::FunctionCallbackInfo<Value>& args) {
     k = args[4]->Uint32Value();
   }
 
-  if(!node::Buffer::HasInstance(header) || !node::Buffer::HasInstance(solution)) {
+  if(!node::Buffer::HasInstance(header) || !node::Buffer::HasInstance(solution) || !node::Buffer::HasInstance(nonce) ) {
   isolate->ThrowException(Exception::TypeError(
     String::NewFromUtf8(isolate, "Arguments should be buffer objects.")));
   return;
