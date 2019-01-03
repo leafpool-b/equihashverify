@@ -21,6 +21,7 @@
                 "crypto/sha512.cpp",
                 "core/difficulty.cpp",
                 "core/uintBig.cpp",
+                "utility/common.cpp",
                 "crypto/blake/sse/blake2b.cpp", 
                 "equihashverify.cc"                
             ],
