@@ -47,6 +47,24 @@ float diff_float(uint32_t stratDiff){
     return powDiff.ToFloat();
 }
 
+void Getdiff(const v8::FunctionCallbackInfo<Value>& args) {
+  Isolate* isolate = Isolate::GetCurrent();
+  HandleScope scope(isolate);
+
+  unsigned int diff;
+
+  if (args.Length() < 1) {
+  isolate->ThrowException(Exception::TypeError(
+    String::NewFromUtf8(isolate, "Wrong number of arguments")));
+  return;
+  }
+
+  diff = args[0]->Uint32Value();
+
+  float result = diff_float(diff);
+  args.GetReturnValue().Set(result);
+}
+
 void Verify(const v8::FunctionCallbackInfo<Value>& args) {
   Isolate* isolate = Isolate::GetCurrent();
   HandleScope scope(isolate);
@@ -94,6 +112,7 @@ void Verify(const v8::FunctionCallbackInfo<Value>& args) {
 
 void Init(Handle<Object> exports) {
   NODE_SET_METHOD(exports, "verify", Verify);
+  NODE_SET_METHOD(exports, "getdiff", Getdiff);
 }
 
 NODE_MODULE(equihashverify, Init)
