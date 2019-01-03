@@ -12,10 +12,15 @@ using namespace v8;
 int verifyEH(const char *hdr, const char *nonceBuff, const std::vector<unsigned char> &soln, unsigned int n = 150, unsigned int k = 5){
   // Hash state
   eh_HashState state;
+  //crypto_generichash_blake2b_state state;
+
   EhInitialiseState(n, k, state);
 
   blake2b_update(&state, (uint8_t*) hdr, 32);
   blake2b_update(&state, (uint8_t*) nonceBuff, 8);
+
+  //crypto_generichash_blake2b_update(&state, (uint8_t*) hdr, 32);
+  //crypto_generichash_blake2b_update(&state, (uint8_t*) nonceBuff, 8);
 
   bool isValid;
   if (n == 96 && k == 3) {

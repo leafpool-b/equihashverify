@@ -9,11 +9,15 @@
 #include "crypto/sha256.h"
 #include "utilstrencodings.h"
 
-#if defined(__ANDROID__) || !defined(BEAM_USE_AVX)
-#include "blake/ref/blake2.h"
-#else
+
+//#if defined(__ANDROID__) || !defined(BEAM_USE_AVX)
+//#include "blake/ref/blake2.h"
+//#else
 #include "blake/sse/blake2.h"
-#endif
+//#endif
+
+
+//#include "sodium.h"
 
 #include <cstring>
 #include <exception>
@@ -25,6 +29,9 @@
 #include <boost/static_assert.hpp>
 
 typedef blake2b_state eh_HashState;
+//typedef crypto_generichash_blake2b_state  eh_HashState;
+
+
 typedef uint32_t eh_index;
 typedef uint8_t eh_trunc;
 
@@ -174,7 +181,7 @@ class Equihash
 private:
     BOOST_STATIC_ASSERT(K < N);
     BOOST_STATIC_ASSERT((N/(K+1)) + 1 < 8*sizeof(eh_index));
-  
+
 public:
     enum : size_t { IndicesPerHashOutput=512/N };
     enum : size_t { HashOutput = IndicesPerHashOutput * GetSizeInBytes(N) };
