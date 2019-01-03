@@ -82,7 +82,7 @@ void DiffCheck(const v8::FunctionCallbackInfo<Value>& args) {
   diff = args[1]->Uint32Value();
   powDiff = beam::Difficulty(diff);
 
-  bool targetReached = true; //powDiff.IsTargetReached(soln);
+  bool targetReached = powDiff.IsTargetReached(soln);
 
   args.GetReturnValue().Set(targetReached);
 }
