@@ -4,7 +4,7 @@
 #include <v8.h>
 #include <stdint.h>
 #include "crypto/equihash.h"
-
+#include "core/difficulty.h"
 
 #include <vector>
 using namespace v8;
@@ -16,7 +16,7 @@ int verifyEH(const char *hdr, const char *nonceBuff, const std::vector<unsigned 
 
   blake2b_update(&state, (uint8_t*) hdr, 32);
   blake2b_update(&state, (uint8_t*) nonceBuff, 8);
-	
+
   bool isValid;
   if (n == 96 && k == 3) {
       isValid = Eh96_3.IsValidSolution(state, soln);
@@ -35,8 +35,16 @@ int verifyEH(const char *hdr, const char *nonceBuff, const std::vector<unsigned 
   } else {
       throw std::invalid_argument("Unsupported Equihash parameters");
   }
-  
+
   return isValid;
+}
+
+float diff_float(uint32_t stratDiff){
+    beam::Difficulty powDiff;
+
+    powDiff = beam::Difficulty(stratDiff);
+
+    return powDiff.ToFloat();
 }
 
 void Verify(const v8::FunctionCallbackInfo<Value>& args) {
