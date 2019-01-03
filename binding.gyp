@@ -19,6 +19,8 @@
                 "crypto/sha1.cpp",
                 "crypto/sha256.cpp",
                 "crypto/sha512.cpp",
+                "core/difficulty.cpp",
+                "core/uintBig.cpp",
                 "equihashverify.cc"                
             ],
             "include_dirs": [
