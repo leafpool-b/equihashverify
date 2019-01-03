@@ -40,16 +40,7 @@ int verifyEH(const char *hdr, const char *nonceBuff, const std::vector<unsigned 
   } else {
       throw std::invalid_argument("Unsupported Equihash parameters");
   }
-
   return isValid;
-}
-
-float diff_float(uint32_t stratDiff){
-    beam::Difficulty powDiff;
-
-    powDiff = beam::Difficulty(stratDiff);
-
-    return powDiff.ToFloat();
 }
 
 void Getdiff(const v8::FunctionCallbackInfo<Value>& args) {
@@ -57,6 +48,7 @@ void Getdiff(const v8::FunctionCallbackInfo<Value>& args) {
   HandleScope scope(isolate);
 
   unsigned int diff;
+  beam::Difficulty powDiff;
 
   if (args.Length() < 1) {
   isolate->ThrowException(Exception::TypeError(
@@ -65,9 +57,34 @@ void Getdiff(const v8::FunctionCallbackInfo<Value>& args) {
   }
 
   diff = args[0]->Uint32Value();
+  powDiff = beam::Difficulty(diff);
 
-  float result = diff_float(diff);
+  float result = powDiff.ToFloat();
   args.GetReturnValue().Set(result);
+}
+
+
+void DiffCheck(const v8::FunctionCallbackInfo<Value>& args) {
+  Isolate* isolate = Isolate::GetCurrent();
+  HandleScope scope(isolate);
+
+  unsigned int diff;
+  beam::Difficulty powDiff;
+
+  if (args.Length() < 2) {
+  isolate->ThrowException(Exception::TypeError(
+    String::NewFromUtf8(isolate, "Wrong number of arguments")));
+  return;
+  }
+
+  Local<Object> solnHash = args[0]->ToObject();
+  const char *soln = node::Buffer::Data(solnHash);
+  diff = args[1]->Uint32Value();
+  powDiff = beam::Difficulty(diff);
+
+  bool targetReached = diff.IsTargetReached(soln);
+
+  args.GetReturnValue().Set(targetReached);
 }
 
 void Verify(const v8::FunctionCallbackInfo<Value>& args) {
@@ -118,6 +135,7 @@ void Verify(const v8::FunctionCallbackInfo<Value>& args) {
 void Init(Handle<Object> exports) {
   NODE_SET_METHOD(exports, "verify", Verify);
   NODE_SET_METHOD(exports, "getdiff", Getdiff);
+  NODE_SET_METHOD(exports, "diffcheck", DiffCheck);
 }
 
 NODE_MODULE(equihashverify, Init)
