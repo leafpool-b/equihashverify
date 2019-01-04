@@ -52,8 +52,11 @@ namespace beam
 			assert(nDst >= nBytesX + nOffsetBytes);
 			nDst -= (nOffsetBytes + nBytesX);
 
-			for (uint32_t i = nBytesX; i--; x >>= 8)
-				pDst[nDst + i] = (uint8_t) x;
+			for (uint32_t i = nBytesX; i--;){
+                 x = x >> 8;
+                 pDst[nDst + i] = (uint8_t)x;
+			}
+
 		}
 
 		template <typename T>
