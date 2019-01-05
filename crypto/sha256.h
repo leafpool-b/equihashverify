@@ -1,33 +1,22 @@
-// Copyright (c) 2014 The Bitcoin Core developers
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+/* Sha256.h -- SHA-256 Hash
+2016-11-04 : Marc Bevand : A few changes to make it more self-contained
+2010-06-11 : Igor Pavlov : Public domain */
 
-#ifndef BITCOIN_CRYPTO_SHA256_H
-#define BITCOIN_CRYPTO_SHA256_H
+#ifndef __CRYPTO_SHA256_H
+#define __CRYPTO_SHA256_H
 
-#include <stdint.h>
-#include <stdlib.h>
+#define SHA256_DIGEST_SIZE 32
 
-
-/** A hasher class for SHA-256. */
-class CSHA256
+typedef struct
 {
-public:
-    static const size_t OUTPUT_SIZE = 32;
+  uint32_t state[8];
+  uint64_t count;
+  uint8_t buffer[64];
+} CSha256;
 
-    CSHA256();
-    CSHA256& Write(const unsigned char* data, size_t len);
-    void Finalize(unsigned char hash[OUTPUT_SIZE]);
-    void FinalizeNoPadding(unsigned char hash[OUTPUT_SIZE]) {
-    	FinalizeNoPadding(hash, true);
-    };
-    CSHA256& Reset();
+void Sha256_Init(CSha256 *p);
+void Sha256_Update(CSha256 *p, const uint8_t *data, size_t size);
+void Sha256_Final(CSha256 *p, uint8_t *digest);
+void Sha256_Onestep(const uint8_t *data, size_t size, uint8_t *digest);
 
-private:
-    uint32_t s[8];
-    unsigned char buf[64];
-    size_t bytes;
-    void FinalizeNoPadding(unsigned char hash[OUTPUT_SIZE], bool enforce_compression);
-};
-
-#endif // BITCOIN_CRYPTO_SHA256_H
+#endif
