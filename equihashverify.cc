@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "crypto/equihash.h"
 #include "core/difficulty.h"
+#include "crypto/sha256.h"
 
 #include <vector>
 using namespace v8;
