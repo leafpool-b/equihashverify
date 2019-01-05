@@ -6,6 +6,7 @@
 #define __CRYPTO_SHA256_H
 
 #define SHA256_DIGEST_SIZE 32
+#include <stdint.h>
 
 typedef struct
 {
