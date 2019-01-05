@@ -1,199 +1,217 @@
-// Copyright (c) 2014 The Bitcoin Core developers
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+/* Crypto/Sha256.c -- SHA-256 Hash
+2016-11-04 : Marc Bevand : A few changes to make it more self-contained
+2010-06-11 : Igor Pavlov : Public domain
+This code is based on public domain code from Wei Dai's Crypto++ library. */
 
-#include "crypto/sha256.h"
-
-#include "crypto/common.h"
-
+#include <stdint.h>
 #include <string.h>
-#include <stdexcept>
+#include "sha256.h"
 
-// Internal implementation code.
-namespace
-{
-/// Internal SHA-256 implementation.
-namespace sha256
-{
-uint32_t inline Ch(uint32_t x, uint32_t y, uint32_t z) { return z ^ (x & (y ^ z)); }
-uint32_t inline Maj(uint32_t x, uint32_t y, uint32_t z) { return (x & y) | (z & (x | y)); }
-uint32_t inline Sigma0(uint32_t x) { return (x >> 2 | x << 30) ^ (x >> 13 | x << 19) ^ (x >> 22 | x << 10); }
-uint32_t inline Sigma1(uint32_t x) { return (x >> 6 | x << 26) ^ (x >> 11 | x << 21) ^ (x >> 25 | x << 7); }
-uint32_t inline sigma0(uint32_t x) { return (x >> 7 | x << 25) ^ (x >> 18 | x << 14) ^ (x >> 3); }
-uint32_t inline sigma1(uint32_t x) { return (x >> 17 | x << 15) ^ (x >> 19 | x << 13) ^ (x >> 10); }
+/* define it for speed optimization */
+/* #define _SHA256_UNROLL */
+/* #define _SHA256_UNROLL2 */
 
-/** One round of SHA-256. */
-void inline Round(uint32_t a, uint32_t b, uint32_t c, uint32_t& d, uint32_t e, uint32_t f, uint32_t g, uint32_t& h, uint32_t k, uint32_t w)
+#define rotlFixed(x, n) (((x) << (n)) | ((x) >> (32 - (n))))
+#define rotrFixed(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
+
+inline void Sha256_Init(CSha256 *p)
 {
-    uint32_t t1 = h + Sigma1(e) + Ch(e, f, g) + k + w;
-    uint32_t t2 = Sigma0(a) + Maj(a, b, c);
-    d += t1;
-    h = t1 + t2;
+  p->state[0] = 0x6a09e667;
+  p->state[1] = 0xbb67ae85;
+  p->state[2] = 0x3c6ef372;
+  p->state[3] = 0xa54ff53a;
+  p->state[4] = 0x510e527f;
+  p->state[5] = 0x9b05688c;
+  p->state[6] = 0x1f83d9ab;
+  p->state[7] = 0x5be0cd19;
+  p->count = 0;
 }
 
-/** Initialize SHA-256 state. */
-void inline Initialize(uint32_t* s)
+#define S0(x) (rotrFixed(x, 2) ^ rotrFixed(x,13) ^ rotrFixed(x, 22))
+#define S1(x) (rotrFixed(x, 6) ^ rotrFixed(x,11) ^ rotrFixed(x, 25))
+#define s0(x) (rotrFixed(x, 7) ^ rotrFixed(x,18) ^ (x >> 3))
+#define s1(x) (rotrFixed(x,17) ^ rotrFixed(x,19) ^ (x >> 10))
+
+#define blk0(i) (W[i] = data[i])
+#define blk2(i) (W[i&15] += s1(W[(i-2)&15]) + W[(i-7)&15] + s0(W[(i-15)&15]))
+
+#define Ch2(x,y,z) (z^(x&(y^z)))
+#define Maj(x,y,z) ((x&y)|(z&(x|y)))
+
+#define sha_a(i) T[(0-(i))&7]
+#define sha_b(i) T[(1-(i))&7]
+#define sha_c(i) T[(2-(i))&7]
+#define sha_d(i) T[(3-(i))&7]
+#define sha_e(i) T[(4-(i))&7]
+#define sha_f(i) T[(5-(i))&7]
+#define sha_g(i) T[(6-(i))&7]
+#define sha_h(i) T[(7-(i))&7]
+
+
+#ifdef _SHA256_UNROLL2
+
+#define R(a,b,c,d,e,f,g,h, i) h += S1(e) + Ch2(e,f,g) + K[i+j] + (j?blk2(i):blk0(i));\
+  d += h; h += S0(a) + Maj(a, b, c)
+
+#define RX_8(i) \
+  R(a,b,c,d,e,f,g,h, i); \
+  R(h,a,b,c,d,e,f,g, i+1); \
+  R(g,h,a,b,c,d,e,f, i+2); \
+  R(f,g,h,a,b,c,d,e, i+3); \
+  R(e,f,g,h,a,b,c,d, i+4); \
+  R(d,e,f,g,h,a,b,c, i+5); \
+  R(c,d,e,f,g,h,a,b, i+6); \
+  R(b,c,d,e,f,g,h,a, i+7)
+
+#else
+
+#define R(i) sha_h(i) += S1(sha_e(i)) + Ch2(sha_e(i),sha_f(i),sha_g(i)) + K[i+j] + (j?blk2(i):blk0(i));\
+  sha_d(i) += sha_h(i); sha_h(i) += S0(sha_a(i)) + Maj(sha_a(i), sha_b(i), sha_c(i))
+
+#ifdef _SHA256_UNROLL
+
+#define RX_8(i) R(i+0); R(i+1); R(i+2); R(i+3); R(i+4); R(i+5); R(i+6); R(i+7);
+
+#endif
+
+#endif
+
+static const uint32_t K[64] = {
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+  0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+  0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+  0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+  0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+  0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+  0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+  0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+  0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+};
+
+inline static void Sha256_Transform(uint32_t *state, const uint32_t *data)
 {
-    s[0] = 0x6a09e667ul;
-    s[1] = 0xbb67ae85ul;
-    s[2] = 0x3c6ef372ul;
-    s[3] = 0xa54ff53aul;
-    s[4] = 0x510e527ful;
-    s[5] = 0x9b05688cul;
-    s[6] = 0x1f83d9abul;
-    s[7] = 0x5be0cd19ul;
+  uint32_t W[16];
+  unsigned j;
+  #ifdef _SHA256_UNROLL2
+  uint32_t a,b,c,d,e,f,g,h;
+  a = state[0];
+  b = state[1];
+  c = state[2];
+  d = state[3];
+  e = state[4];
+  f = state[5];
+  g = state[6];
+  h = state[7];
+  #else
+  uint32_t T[8];
+  for (j = 0; j < 8; j++)
+    T[j] = state[j];
+  #endif
+
+  for (j = 0; j < 64; j += 16)
+  {
+    #if defined(_SHA256_UNROLL) || defined(_SHA256_UNROLL2)
+    RX_8(0); RX_8(8);
+    #else
+    unsigned i;
+    for (i = 0; i < 16; i++) { R(i); }
+    #endif
+  }
+
+  #ifdef _SHA256_UNROLL2
+  state[0] += a;
+  state[1] += b;
+  state[2] += c;
+  state[3] += d;
+  state[4] += e;
+  state[5] += f;
+  state[6] += g;
+  state[7] += h;
+  #else
+  for (j = 0; j < 8; j++)
+    state[j] += T[j];
+  #endif
+  
+  /* Wipe variables */
+  /* memset(W, 0, sizeof(W)); */
+  /* memset(T, 0, sizeof(T)); */
 }
 
-/** Perform one SHA-256 transformation, processing a 64-byte chunk. */
-void Transform(uint32_t* s, const unsigned char* chunk)
+#undef S0
+#undef S1
+#undef s0
+#undef s1
+
+inline static void Sha256_WriteByteBlock(CSha256 *p)
 {
-    uint32_t a = s[0], b = s[1], c = s[2], d = s[3], e = s[4], f = s[5], g = s[6], h = s[7];
-    uint32_t w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15;
-
-    Round(a, b, c, d, e, f, g, h, 0x428a2f98, w0 = ReadBE32(chunk + 0));
-    Round(h, a, b, c, d, e, f, g, 0x71374491, w1 = ReadBE32(chunk + 4));
-    Round(g, h, a, b, c, d, e, f, 0xb5c0fbcf, w2 = ReadBE32(chunk + 8));
-    Round(f, g, h, a, b, c, d, e, 0xe9b5dba5, w3 = ReadBE32(chunk + 12));
-    Round(e, f, g, h, a, b, c, d, 0x3956c25b, w4 = ReadBE32(chunk + 16));
-    Round(d, e, f, g, h, a, b, c, 0x59f111f1, w5 = ReadBE32(chunk + 20));
-    Round(c, d, e, f, g, h, a, b, 0x923f82a4, w6 = ReadBE32(chunk + 24));
-    Round(b, c, d, e, f, g, h, a, 0xab1c5ed5, w7 = ReadBE32(chunk + 28));
-    Round(a, b, c, d, e, f, g, h, 0xd807aa98, w8 = ReadBE32(chunk + 32));
-    Round(h, a, b, c, d, e, f, g, 0x12835b01, w9 = ReadBE32(chunk + 36));
-    Round(g, h, a, b, c, d, e, f, 0x243185be, w10 = ReadBE32(chunk + 40));
-    Round(f, g, h, a, b, c, d, e, 0x550c7dc3, w11 = ReadBE32(chunk + 44));
-    Round(e, f, g, h, a, b, c, d, 0x72be5d74, w12 = ReadBE32(chunk + 48));
-    Round(d, e, f, g, h, a, b, c, 0x80deb1fe, w13 = ReadBE32(chunk + 52));
-    Round(c, d, e, f, g, h, a, b, 0x9bdc06a7, w14 = ReadBE32(chunk + 56));
-    Round(b, c, d, e, f, g, h, a, 0xc19bf174, w15 = ReadBE32(chunk + 60));
-
-    Round(a, b, c, d, e, f, g, h, 0xe49b69c1, w0 += sigma1(w14) + w9 + sigma0(w1));
-    Round(h, a, b, c, d, e, f, g, 0xefbe4786, w1 += sigma1(w15) + w10 + sigma0(w2));
-    Round(g, h, a, b, c, d, e, f, 0x0fc19dc6, w2 += sigma1(w0) + w11 + sigma0(w3));
-    Round(f, g, h, a, b, c, d, e, 0x240ca1cc, w3 += sigma1(w1) + w12 + sigma0(w4));
-    Round(e, f, g, h, a, b, c, d, 0x2de92c6f, w4 += sigma1(w2) + w13 + sigma0(w5));
-    Round(d, e, f, g, h, a, b, c, 0x4a7484aa, w5 += sigma1(w3) + w14 + sigma0(w6));
-    Round(c, d, e, f, g, h, a, b, 0x5cb0a9dc, w6 += sigma1(w4) + w15 + sigma0(w7));
-    Round(b, c, d, e, f, g, h, a, 0x76f988da, w7 += sigma1(w5) + w0 + sigma0(w8));
-    Round(a, b, c, d, e, f, g, h, 0x983e5152, w8 += sigma1(w6) + w1 + sigma0(w9));
-    Round(h, a, b, c, d, e, f, g, 0xa831c66d, w9 += sigma1(w7) + w2 + sigma0(w10));
-    Round(g, h, a, b, c, d, e, f, 0xb00327c8, w10 += sigma1(w8) + w3 + sigma0(w11));
-    Round(f, g, h, a, b, c, d, e, 0xbf597fc7, w11 += sigma1(w9) + w4 + sigma0(w12));
-    Round(e, f, g, h, a, b, c, d, 0xc6e00bf3, w12 += sigma1(w10) + w5 + sigma0(w13));
-    Round(d, e, f, g, h, a, b, c, 0xd5a79147, w13 += sigma1(w11) + w6 + sigma0(w14));
-    Round(c, d, e, f, g, h, a, b, 0x06ca6351, w14 += sigma1(w12) + w7 + sigma0(w15));
-    Round(b, c, d, e, f, g, h, a, 0x14292967, w15 += sigma1(w13) + w8 + sigma0(w0));
-
-    Round(a, b, c, d, e, f, g, h, 0x27b70a85, w0 += sigma1(w14) + w9 + sigma0(w1));
-    Round(h, a, b, c, d, e, f, g, 0x2e1b2138, w1 += sigma1(w15) + w10 + sigma0(w2));
-    Round(g, h, a, b, c, d, e, f, 0x4d2c6dfc, w2 += sigma1(w0) + w11 + sigma0(w3));
-    Round(f, g, h, a, b, c, d, e, 0x53380d13, w3 += sigma1(w1) + w12 + sigma0(w4));
-    Round(e, f, g, h, a, b, c, d, 0x650a7354, w4 += sigma1(w2) + w13 + sigma0(w5));
-    Round(d, e, f, g, h, a, b, c, 0x766a0abb, w5 += sigma1(w3) + w14 + sigma0(w6));
-    Round(c, d, e, f, g, h, a, b, 0x81c2c92e, w6 += sigma1(w4) + w15 + sigma0(w7));
-    Round(b, c, d, e, f, g, h, a, 0x92722c85, w7 += sigma1(w5) + w0 + sigma0(w8));
-    Round(a, b, c, d, e, f, g, h, 0xa2bfe8a1, w8 += sigma1(w6) + w1 + sigma0(w9));
-    Round(h, a, b, c, d, e, f, g, 0xa81a664b, w9 += sigma1(w7) + w2 + sigma0(w10));
-    Round(g, h, a, b, c, d, e, f, 0xc24b8b70, w10 += sigma1(w8) + w3 + sigma0(w11));
-    Round(f, g, h, a, b, c, d, e, 0xc76c51a3, w11 += sigma1(w9) + w4 + sigma0(w12));
-    Round(e, f, g, h, a, b, c, d, 0xd192e819, w12 += sigma1(w10) + w5 + sigma0(w13));
-    Round(d, e, f, g, h, a, b, c, 0xd6990624, w13 += sigma1(w11) + w6 + sigma0(w14));
-    Round(c, d, e, f, g, h, a, b, 0xf40e3585, w14 += sigma1(w12) + w7 + sigma0(w15));
-    Round(b, c, d, e, f, g, h, a, 0x106aa070, w15 += sigma1(w13) + w8 + sigma0(w0));
-
-    Round(a, b, c, d, e, f, g, h, 0x19a4c116, w0 += sigma1(w14) + w9 + sigma0(w1));
-    Round(h, a, b, c, d, e, f, g, 0x1e376c08, w1 += sigma1(w15) + w10 + sigma0(w2));
-    Round(g, h, a, b, c, d, e, f, 0x2748774c, w2 += sigma1(w0) + w11 + sigma0(w3));
-    Round(f, g, h, a, b, c, d, e, 0x34b0bcb5, w3 += sigma1(w1) + w12 + sigma0(w4));
-    Round(e, f, g, h, a, b, c, d, 0x391c0cb3, w4 += sigma1(w2) + w13 + sigma0(w5));
-    Round(d, e, f, g, h, a, b, c, 0x4ed8aa4a, w5 += sigma1(w3) + w14 + sigma0(w6));
-    Round(c, d, e, f, g, h, a, b, 0x5b9cca4f, w6 += sigma1(w4) + w15 + sigma0(w7));
-    Round(b, c, d, e, f, g, h, a, 0x682e6ff3, w7 += sigma1(w5) + w0 + sigma0(w8));
-    Round(a, b, c, d, e, f, g, h, 0x748f82ee, w8 += sigma1(w6) + w1 + sigma0(w9));
-    Round(h, a, b, c, d, e, f, g, 0x78a5636f, w9 += sigma1(w7) + w2 + sigma0(w10));
-    Round(g, h, a, b, c, d, e, f, 0x84c87814, w10 += sigma1(w8) + w3 + sigma0(w11));
-    Round(f, g, h, a, b, c, d, e, 0x8cc70208, w11 += sigma1(w9) + w4 + sigma0(w12));
-    Round(e, f, g, h, a, b, c, d, 0x90befffa, w12 += sigma1(w10) + w5 + sigma0(w13));
-    Round(d, e, f, g, h, a, b, c, 0xa4506ceb, w13 += sigma1(w11) + w6 + sigma0(w14));
-    Round(c, d, e, f, g, h, a, b, 0xbef9a3f7, w14 + sigma1(w12) + w7 + sigma0(w15));
-    Round(b, c, d, e, f, g, h, a, 0xc67178f2, w15 + sigma1(w13) + w8 + sigma0(w0));
-
-    s[0] += a;
-    s[1] += b;
-    s[2] += c;
-    s[3] += d;
-    s[4] += e;
-    s[5] += f;
-    s[6] += g;
-    s[7] += h;
+  uint32_t data32[16];
+  unsigned i;
+  for (i = 0; i < 16; i++)
+    data32[i] =
+      ((uint32_t)(p->buffer[i * 4    ]) << 24) +
+      ((uint32_t)(p->buffer[i * 4 + 1]) << 16) +
+      ((uint32_t)(p->buffer[i * 4 + 2]) <<  8) +
+      ((uint32_t)(p->buffer[i * 4 + 3]));
+  Sha256_Transform(p->state, data32);
 }
 
-} // namespace sha256
-} // namespace
-
-
-////// SHA-256
-
-CSHA256::CSHA256() : bytes(0)
+inline void Sha256_Update(CSha256 *p, const uint8_t *data, size_t size)
 {
-    sha256::Initialize(s);
-}
-
-CSHA256& CSHA256::Write(const unsigned char* data, size_t len)
-{
-    const unsigned char* end = data + len;
-    size_t bufsize = bytes % 64;
-    if (bufsize && bufsize + len >= 64) {
-        // Fill the buffer, and process it.
-        memcpy(buf + bufsize, data, 64 - bufsize);
-        bytes += 64 - bufsize;
-        data += 64 - bufsize;
-        sha256::Transform(s, buf);
-        bufsize = 0;
+  uint32_t curBufferPos = (uint32_t)p->count & 0x3F;
+  while (size > 0)
+  {
+    p->buffer[curBufferPos++] = *data++;
+    p->count++;
+    size--;
+    if (curBufferPos == 64)
+    {
+      curBufferPos = 0;
+      Sha256_WriteByteBlock(p);
     }
-    while (end >= data + 64) {
-        // Process full chunks directly from the source.
-        sha256::Transform(s, data);
-        bytes += 64;
-        data += 64;
-    }
-    if (end > data) {
-        // Fill the buffer with what remains.
-        memcpy(buf + bufsize, data, end - data);
-        bytes += end - data;
-    }
-    return *this;
+  }
 }
 
-void CSHA256::Finalize(unsigned char hash[OUTPUT_SIZE])
+inline void Sha256_Final(CSha256 *p, uint8_t *digest)
 {
-    static const unsigned char pad[64] = {0x80};
-    unsigned char sizedesc[8];
-    WriteBE64(sizedesc, bytes << 3);
-    Write(pad, 1 + ((119 - (bytes % 64)) % 64));
-    Write(sizedesc, 8);
-    FinalizeNoPadding(hash, false);
+  uint64_t lenInBits = (p->count << 3);
+  uint32_t curBufferPos = (uint32_t)p->count & 0x3F;
+  unsigned i;
+  p->buffer[curBufferPos++] = 0x80;
+  while (curBufferPos != (64 - 8))
+  {
+    curBufferPos &= 0x3F;
+    if (curBufferPos == 0)
+      Sha256_WriteByteBlock(p);
+    p->buffer[curBufferPos++] = 0;
+  }
+  for (i = 0; i < 8; i++)
+  {
+    p->buffer[curBufferPos++] = (uint8_t)(lenInBits >> 56);
+    lenInBits <<= 8;
+  }
+  Sha256_WriteByteBlock(p);
+
+  for (i = 0; i < 8; i++)
+  {
+    *digest++ = (uint8_t)(p->state[i] >> 24);
+    *digest++ = (uint8_t)(p->state[i] >> 16);
+    *digest++ = (uint8_t)(p->state[i] >> 8);
+    *digest++ = (uint8_t)(p->state[i]);
+  }
+  Sha256_Init(p);
 }
 
-void CSHA256::FinalizeNoPadding(unsigned char hash[OUTPUT_SIZE], bool enforce_compression)
+inline void Sha256_Onestep(const uint8_t *data, size_t size, uint8_t *digest)
 {
-    if (enforce_compression && bytes != 64) {
-        throw std::length_error("SHA256Compress should be invoked with a 512-bit block");
-    }
-
-    WriteBE32(hash, s[0]);
-    WriteBE32(hash + 4, s[1]);
-    WriteBE32(hash + 8, s[2]);
-    WriteBE32(hash + 12, s[3]);
-    WriteBE32(hash + 16, s[4]);
-    WriteBE32(hash + 20, s[5]);
-    WriteBE32(hash + 24, s[6]);
-    WriteBE32(hash + 28, s[7]);
-}
-
-CSHA256& CSHA256::Reset()
-{
-    bytes = 0;
-    sha256::Initialize(s);
-    return *this;
+    CSha256 p;
+    Sha256_Init(&p);
+    Sha256_Update(&p, data, size);
+    Sha256_Final(&p, digest);
 }
