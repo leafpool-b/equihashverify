@@ -85,7 +85,7 @@ void DiffCheck(const v8::FunctionCallbackInfo<Value>& args) {
 
   beam::uintBig_t<32> hv;
 
-  Sha256_Onestep(soln, node::Buffer::Length(solnHash), hv.m_pData);
+  memcpy(hv.m_pData, soln, node::Buffer::Length(solnHash));
 
   bool targetReached = powDiff.IsTargetReached(hv);
 
