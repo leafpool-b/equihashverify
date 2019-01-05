@@ -83,9 +83,8 @@ void DiffCheck(const v8::FunctionCallbackInfo<Value>& args) {
   powDiff = beam::Difficulty(diff);
 
   beam::uintBig_t<32> hv;
-  std::vector<unsigned char> vecSolution(soln, soln + node::Buffer::Length(solnHash));
 
-  Sha256_Onestep(vecSolution, node::Buffer::Length(solnHash), hv.m_pData);
+  Sha256_Onestep(soln, node::Buffer::Length(solnHash), hv.m_pData);
 
   bool targetReached = powDiff.IsTargetReached(hv);
 
