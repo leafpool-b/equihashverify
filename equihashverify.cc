@@ -82,7 +82,11 @@ void DiffCheck(const v8::FunctionCallbackInfo<Value>& args) {
   diff = args[1]->Uint32Value();
   powDiff = beam::Difficulty(diff);
 
-  bool targetReached = powDiff.IsTargetReached(soln);
+  beam::uintBig_t<32> hv;
+  Sha256_Onestep(soln, node::Buffer::Length(solnHash), hv.m_pData);
+
+
+  bool targetReached = powDiff.IsTargetReached(hv);
 
   args.GetReturnValue().Set(targetReached);
 }
