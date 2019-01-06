@@ -60,7 +60,7 @@ void Getdiff(const v8::FunctionCallbackInfo<Value>& args) {
   diff = args[0]->Uint32Value();
   powDiff = beam::Difficulty(diff);
 
-  float result = powDiff.ToFloat();
+  double result = powDiff.ToFloat();
   args.GetReturnValue().Set(result);
 }
 
