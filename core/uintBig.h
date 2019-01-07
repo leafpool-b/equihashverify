@@ -54,7 +54,7 @@ namespace beam
             uint32_t x_ = (uint32_t)x;
 
 			for (uint32_t i = nBytesX; i--; x_>>=8){
-                 pDst[nDst + i] = (uint8_t)x;
+                 pDst[nDst + i] = (uint8_t)x_;
 			}
 
 		}
